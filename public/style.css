@@ -1,0 +1,135 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f5f6fa;
+  color: #1a1a1a;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+/* --- Page wrapper --- */
+.page {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* --- The white card --- */
+.card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  padding: 2rem;
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  letter-spacing: 0.5px;
+  margin-bottom: 1.5rem;
+}
+
+/* --- Form: input + button as one unit --- */
+form {
+  display: flex;
+  border: 1.5px solid #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+input[type="text"] {
+  flex: 1;
+  padding: 0.75rem 0.9rem;
+  border: none;
+  font-size: 1rem;
+  font-family: inherit;
+  background: transparent;
+  outline: none;
+}
+
+input[type="text"]::placeholder {
+  color: #999;
+}
+
+button {
+  padding: 0.75rem 1.4rem;
+  background: #6c5ce7;
+  color: #fff;
+  border: none;
+  font-size: 1rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button:hover {
+  background: #5a4bd1;
+}
+
+/* --- Task list (below the card) --- */
+ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+li {
+  background: #fff;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+li input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: #6c5ce7;
+}
+
+li .task-title {
+  flex: 1;
+  word-break: break-word;
+}
+
+li.completed .task-title {
+  text-decoration: line-through;
+  color: #999;
+}
+
+li .delete-btn {
+  background: transparent;
+  color: #d63031;
+  padding: 0.35rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+li .delete-btn:hover {
+  background: #ffeaea;
+}
+
+/* --- Empty state --- */
+#empty-state {
+  text-align: center;
+  color: #999;
+  font-size: 0.95rem;
+}

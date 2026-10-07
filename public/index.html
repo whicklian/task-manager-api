@@ -9,21 +9,81 @@
 <body>
   <div class="page">
 
+    <!-- ============ CREATE CARD ============ -->
     <div class="card">
       <h1>Task Manager</h1>
 
       <form id="task-form">
         <input
           type="text"
-          id="task-input"
-          placeholder="e.g. wash dishes"
+          id="title-input"
+          placeholder="What needs to be done?"
           autocomplete="off"
           required
         />
-        <button type="submit">Submit</button>
+
+        <div class="row">
+          <select id="status-input">
+            <option value="not_started">Not started</option>
+            <option value="in_progress">In progress</option>
+            <option value="blocked">Blocked</option>
+            <option value="on_hold">On hold</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+
+        <div class="row two-cols">
+          <label>
+            <span>Start</span>
+            <input type="datetime-local" id="start-input" required />
+          </label>
+          <label>
+            <span>End</span>
+            <input type="datetime-local" id="end-input" required />
+          </label>
+        </div>
+
+        <button type="submit">Add Task</button>
       </form>
     </div>
 
+    <!-- ============ TOOLBAR ============ -->
+    <div class="toolbar">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search by title..."
+        autocomplete="off"
+      />
+      <select id="filter-status">
+        <option value="">All statuses</option>
+        <option value="not_started">Not started</option>
+        <option value="in_progress">In progress</option>
+        <option value="blocked">Blocked</option>
+        <option value="on_hold">On hold</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <!-- ============ BULK ACTION BAR ============ -->
+    <div id="bulk-bar" class="bulk-bar" hidden>
+      <span id="bulk-count">0 selected</span>
+      <select id="bulk-status">
+        <option value="">Set status to...</option>
+        <option value="not_started">Not started</option>
+        <option value="in_progress">In progress</option>
+        <option value="blocked">Blocked</option>
+        <option value="on_hold">On hold</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <button type="button" id="bulk-apply">Apply</button>
+      <button type="button" id="bulk-clear">Clear</button>
+    </div>
+
+    <!-- ============ TASK LIST ============ -->
     <ul id="task-list"></ul>
     <p id="empty-state" hidden>No tasks yet. Add one above!</p>
 

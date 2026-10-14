@@ -106,7 +106,7 @@ async function createTask(req, res) {
     });
   }
 
-  // 5. Start cannot be in the past
+  // 5. Start cannot be earlier than the current time
   if (start < new Date()) {
     return sendJSON(res, 400, {
       error: 'start_time cannot be before the current time'
@@ -132,9 +132,17 @@ async function createTask(req, res) {
 }
 
 async function updateTask(req, res, id) {
-  const { title, status, start_time, end_time } = await readBody(req);
+  const body = await readBody(req);
+  const { title, status, end_time } = body;
 
-  // Fetch existing task so we can validate combined state
+  // start_time is not editable — reject if sent
+  if (body.start_time !== undefined) {
+    return sendJSON(res, 400, {
+      error: 'start_time cannot be edited'
+    });
+  }
+
+  // Fetch existing task
   const existing = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
   if (existing.rows.length === 0) {
     return sendJSON(res, 404, { error: 'Task not found' });
@@ -155,43 +163,45 @@ async function updateTask(req, res, id) {
     });
   }
 
-  // 3. Determine the final start/end times (merging with existing)
-  const finalStart = start_time !== undefined
-    ? new Date(start_time)
-    : new Date(current.start_time);
+  // 3. Validate end_time if provided
+  let newEnd = null;
 
-  const finalEnd = end_time !== undefined
-    ? new Date(end_time)
-    : new Date(current.end_time);
+  if (end_time !== undefined) {
+    newEnd = new Date(end_time);
 
-  if (isNaN(finalStart.getTime())) {
-    return sendJSON(res, 400, { error: 'start_time must be a valid date' });
+    if (isNaN(newEnd.getTime())) {
+      return sendJSON(res, 400, { error: 'end_time must be a valid date' });
+    }
+
+    // end_time can only move later, not earlier
+    const currentEnd = new Date(current.end_time);
+    if (newEnd < currentEnd) {
+      return sendJSON(res, 400, {
+        error: 'end_time can only be moved later, not earlier'
+      });
+    }
+
+    // Must still be after start_time
+    const currentStart = new Date(current.start_time);
+    if (newEnd <= currentStart) {
+      return sendJSON(res, 400, {
+        error: 'end_time must be after start_time'
+      });
+    }
   }
-  if (isNaN(finalEnd.getTime())) {
-    return sendJSON(res, 400, { error: 'end_time must be a valid date' });
-  }
 
-  // 4. Validate combined time range
-  if (finalEnd <= finalStart) {
-    return sendJSON(res, 400, {
-      error: 'end_time must be after start_time'
-    });
-  }
-
-  // 5. Update
+  // 4. Update
   const { rows } = await pool.query(
     `UPDATE tasks
-        SET title      = COALESCE($1, title),
-            status     = COALESCE($2, status),
-            start_time = COALESCE($3, start_time),
-            end_time   = COALESCE($4, end_time)
-      WHERE id = $5
+        SET title    = COALESCE($1, title),
+            status   = COALESCE($2, status),
+            end_time = COALESCE($3, end_time)
+      WHERE id = $4
       RETURNING *`,
     [
       title !== undefined ? title.trim() : null,
       status ?? null,
-      start_time !== undefined ? finalStart : null,
-      end_time !== undefined ? finalEnd : null,
+      newEnd,
       id,
     ]
   );
@@ -217,15 +227,20 @@ async function bulkUpdateTasks(req, res) {
     if (!Number.isInteger(item.id)) {
       return sendJSON(res, 400, { error: 'Each item must have an integer id' });
     }
+    if (item.start_time !== undefined) {
+      return sendJSON(res, 400, {
+        error: `start_time cannot be edited (id ${item.id})`
+      });
+    }
     if (item.status !== undefined && !VALID_STATUSES.includes(item.status)) {
       return sendJSON(res, 400, {
-        error: `status must be one of: ${VALID_STATUSES.join(', ')}`
+        error: `status must be one of: ${VALID_STATUSES.join(', ')} (id ${item.id})`
       });
     }
     if (item.title !== undefined) {
       if (typeof item.title !== 'string' || !item.title.trim()) {
         return sendJSON(res, 400, {
-          error: `title must be a non-empty string for id ${item.id}`
+          error: `title must be a non-empty string (id ${item.id})`
         });
       }
     }
@@ -238,9 +253,9 @@ async function bulkUpdateTasks(req, res) {
 
     const results = [];
     for (const item of updates) {
-      const { id, title, status, start_time, end_time } = item;
+      const { id, title, status, end_time } = item;
 
-      // Fetch existing so we can validate merged times
+      // Fetch existing
       const existing = await client.query(
         'SELECT * FROM tasks WHERE id = $1',
         [id]
@@ -250,37 +265,38 @@ async function bulkUpdateTasks(req, res) {
       }
       const current = existing.rows[0];
 
-      const finalStart = start_time !== undefined
-        ? new Date(start_time)
-        : new Date(current.start_time);
+      // Validate end_time if provided
+      let newEnd = null;
 
-      const finalEnd = end_time !== undefined
-        ? new Date(end_time)
-        : new Date(current.end_time);
+      if (end_time !== undefined) {
+        newEnd = new Date(end_time);
 
-      if (isNaN(finalStart.getTime())) {
-        throw new Error(`Invalid start_time for id ${id}`);
-      }
-      if (isNaN(finalEnd.getTime())) {
-        throw new Error(`Invalid end_time for id ${id}`);
-      }
-      if (finalEnd <= finalStart) {
-        throw new Error(`end_time must be after start_time for id ${id}`);
+        if (isNaN(newEnd.getTime())) {
+          throw new Error(`Invalid end_time for id ${id}`);
+        }
+
+        const currentEnd = new Date(current.end_time);
+        if (newEnd < currentEnd) {
+          throw new Error(`end_time can only be moved later for id ${id}`);
+        }
+
+        const currentStart = new Date(current.start_time);
+        if (newEnd <= currentStart) {
+          throw new Error(`end_time must be after start_time for id ${id}`);
+        }
       }
 
       const { rows } = await client.query(
         `UPDATE tasks
-            SET title      = COALESCE($1, title),
-                status     = COALESCE($2, status),
-                start_time = COALESCE($3, start_time),
-                end_time   = COALESCE($4, end_time)
-          WHERE id = $5
+            SET title    = COALESCE($1, title),
+                status   = COALESCE($2, status),
+                end_time = COALESCE($3, end_time)
+          WHERE id = $4
           RETURNING *`,
         [
           title !== undefined ? title.trim() : null,
           status ?? null,
-          start_time !== undefined ? finalStart : null,
-          end_time !== undefined ? finalEnd : null,
+          newEnd,
           id,
         ]
       );

@@ -11,6 +11,8 @@ const bulkCountEl = document.getElementById('bulk-count');
 const bulkStatusEl = document.getElementById('bulk-status');
 const bulkApplyEl = document.getElementById('bulk-apply');
 const bulkClearEl = document.getElementById('bulk-clear');
+const startInputEl = document.getElementById('start-input');
+const endInputEl = document.getElementById('end-input');
 
 let allTasks = [];
 const selectedIds = new Set();
@@ -70,6 +72,23 @@ function formatTimeRange(start, end) {
     minute: '2-digit',
   });
   return `${format(start)} → ${format(end)}`;
+}
+
+function toLocalDateTimeValue(value) {
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function setDefaultTaskTimes() {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  now.setMinutes(now.getMinutes() + 5);
+  const end = new Date(now.getTime() + 60 * 60_000);
+  startInputEl.value = toLocalDateTimeValue(now);
+  endInputEl.value = toLocalDateTimeValue(end);
+  startInputEl.min = toLocalDateTimeValue(new Date(Date.now() + 60_000));
+  endInputEl.min = startInputEl.value;
 }
 
 function updateSelectionUI() {
@@ -143,6 +162,67 @@ function render() {
     statusSelect.addEventListener('change', onRowStatusChange);
     li.appendChild(statusSelect);
 
+    const editButton = document.createElement('button');
+    editButton.className = 'edit-btn';
+    editButton.type = 'button';
+    editButton.textContent = 'Edit';
+    editButton.setAttribute('aria-expanded', 'false');
+    li.appendChild(editButton);
+
+    const editForm = document.createElement('form');
+    editForm.className = 'task-editor';
+    editForm.hidden = true;
+
+    const editTitle = document.createElement('label');
+    editTitle.textContent = 'Title';
+    const editTitleInput = document.createElement('input');
+    editTitleInput.type = 'text';
+    editTitleInput.value = task.title;
+    editTitleInput.required = true;
+    editTitle.appendChild(editTitleInput);
+    editForm.appendChild(editTitle);
+
+    const editEnd = document.createElement('label');
+    editEnd.textContent = 'End time (can only be moved later)';
+    const editEndInput = document.createElement('input');
+    editEndInput.type = 'datetime-local';
+    editEndInput.value = toLocalDateTimeValue(task.end_time);
+    editEndInput.min = editEndInput.value;
+    editEndInput.required = true;
+    const originalEndValue = editEndInput.value;
+    editEnd.appendChild(editEndInput);
+    editForm.appendChild(editEnd);
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.textContent = 'Save';
+    editForm.appendChild(saveButton);
+
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.className = 'cancel-edit-btn';
+    cancelButton.textContent = 'Cancel';
+    editForm.appendChild(cancelButton);
+
+    editButton.addEventListener('click', () => {
+      editForm.hidden = !editForm.hidden;
+      editButton.setAttribute('aria-expanded', String(!editForm.hidden));
+    });
+    cancelButton.addEventListener('click', () => {
+      editForm.hidden = true;
+      editButton.setAttribute('aria-expanded', 'false');
+    });
+    editForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      updateTask(
+        task.id,
+        editTitleInput.value,
+        editEndInput.value,
+        originalEndValue,
+      );
+    });
+    li.appendChild(editForm);
+
     const deleteButton = document.createElement('button');
     deleteButton.className = 'delete-btn';
     deleteButton.type = 'button';
@@ -205,14 +285,41 @@ async function deleteTask(id) {
   }
 }
 
+async function updateTask(id, title, endTime, originalEndTime) {
+  const update = { title };
+  if (endTime !== originalEndTime) {
+    update.end_time = new Date(endTime).toISOString();
+  }
+
+  try {
+    await request(`${API}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    });
+    clearError();
+    await loadTasks();
+  } catch (error) {
+    await loadTasks();
+    showError(error);
+  }
+}
+
 formEl.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const start = new Date(document.getElementById('start-input').value);
-  const end = new Date(document.getElementById('end-input').value);
+  const start = new Date(startInputEl.value);
+  const end = new Date(endInputEl.value);
   const submitButton = formEl.querySelector('button[type="submit"]');
   submitButton.disabled = true;
 
   try {
+    startInputEl.min = toLocalDateTimeValue(new Date(Date.now() + 60_000));
+    if (start < new Date()) {
+      throw new Error('Start time cannot be before the current time');
+    }
+    if (end <= start) {
+      throw new Error('End time must be after start time');
+    }
     await request(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -224,6 +331,7 @@ formEl.addEventListener('submit', async (event) => {
       }),
     });
     formEl.reset();
+    setDefaultTaskTimes();
     clearError();
     await loadTasks();
   } catch (error) {
@@ -231,6 +339,10 @@ formEl.addEventListener('submit', async (event) => {
   } finally {
     submitButton.disabled = false;
   }
+});
+
+startInputEl.addEventListener('change', () => {
+  endInputEl.min = startInputEl.value;
 });
 
 bulkApplyEl.addEventListener('click', async () => {
@@ -268,4 +380,5 @@ searchEl.addEventListener('input', () => {
 
 filterStatusEl.addEventListener('change', render);
 
+setDefaultTaskTimes();
 loadTasks();

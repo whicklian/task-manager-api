@@ -255,6 +255,47 @@ li .status-select {
   min-width: 120px;
 }
 
+li .edit-btn {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+li .task-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 0.5rem;
+  width: 100%;
+  margin-left: 2rem;
+}
+
+li .task-editor[hidden] {
+  display: none;
+}
+
+li .task-editor label {
+  display: grid;
+  gap: 0.25rem;
+  color: #666;
+  font-size: 0.75rem;
+}
+
+li .task-editor input {
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+li .task-editor button {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+li .task-editor .cancel-edit-btn {
+  background: #e9ecef;
+  color: #495057;
+}
+
 /* Delete button */
 .delete-btn {
   background: transparent;
@@ -288,4 +329,11 @@ li .status-select {
   border-radius: 8px;
   margin-bottom: 0.75rem;
   padding: 0.75rem 1rem;
+}
+
+@media (max-width: 560px) {
+  li .task-editor {
+    grid-template-columns: 1fr 1fr;
+    margin-left: 0;
+  }
 }

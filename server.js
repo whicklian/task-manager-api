@@ -275,7 +275,7 @@ const server = http.createServer(async (req, res) => {
     if (match) {
       const id = Number(match[1]);
       if (req.method === 'GET')    return await getTask(res, id);
-      if (req.method === 'PUT')    return await updateTask(res, res, id);
+      if (req.method === 'PUT')    return await updateTask(req, res, id);
       if (req.method === 'DELETE') return await deleteTask(res, id);
     }
 
@@ -305,6 +305,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+try {
+  await pool.query('SELECT 1');
+  server.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+} catch (err) {
+  console.error('Unable to connect to PostgreSQL:', err.message);
+  await pool.end();
+  process.exitCode = 1;
+}

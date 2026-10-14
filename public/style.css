@@ -281,3 +281,11 @@ li .status-select {
   font-size: 0.95rem;
   margin-top: 1rem;
 }
+
+#error-state {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+}

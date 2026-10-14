@@ -1,28 +1,58 @@
 const API = '/tasks';
 
-// ---------- DOM ----------
 const listEl = document.getElementById('task-list');
 const emptyEl = document.getElementById('empty-state');
+const errorEl = document.getElementById('error-state');
 const searchEl = document.getElementById('search-input');
 const filterStatusEl = document.getElementById('filter-status');
+const formEl = document.getElementById('task-form');
+const bulkBarEl = document.getElementById('bulk-bar');
+const bulkCountEl = document.getElementById('bulk-count');
+const bulkStatusEl = document.getElementById('bulk-status');
+const bulkApplyEl = document.getElementById('bulk-apply');
+const bulkClearEl = document.getElementById('bulk-clear');
 
-// ---------- State ----------
-// Keep the last full list in memory so the status filter can work client-side
 let allTasks = [];
+const selectedIds = new Set();
 
-// ---------- Fetch helpers ----------
-async function loadTasks() {
-  const search = searchEl.value.trim();
-  const url = search
-    ? `${API}?title=${encodeURIComponent(search)}`
-    : API;
+async function request(url, options) {
+  const response = await fetch(url, options);
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error('The server returned an invalid response');
+  }
 
-  const res = await fetch(url);
-  allTasks = await res.json();
-  render();
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed (${response.status})`);
+  }
+  return data;
 }
 
-// ---------- Format helpers ----------
+function showError(error) {
+  errorEl.textContent = error.message || String(error);
+  errorEl.hidden = false;
+}
+
+function clearError() {
+  errorEl.textContent = '';
+  errorEl.hidden = true;
+}
+
+async function loadTasks() {
+  const search = searchEl.value.trim();
+  const url = search ? `${API}?title=${encodeURIComponent(search)}` : API;
+
+  try {
+    allTasks = await request(url);
+    render();
+    clearError();
+  } catch (error) {
+    showError(error);
+  }
+}
+
 const STATUS_LABELS = {
   not_started: 'Not started',
   in_progress: 'In progress',
@@ -33,25 +63,32 @@ const STATUS_LABELS = {
 };
 
 function formatTimeRange(start, end) {
-  const s = new Date(start);
-  const e = new Date(end);
-  const fmt = (d) => d.toLocaleString(undefined, {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+  const format = (value) => new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
-  return `${fmt(s)} → ${fmt(e)}`;
+  return `${format(start)} → ${format(end)}`;
 }
 
-// ---------- Render ----------
+function updateSelectionUI() {
+  bulkBarEl.hidden = selectedIds.size === 0;
+  bulkCountEl.textContent = `${selectedIds.size} selected`;
+  bulkApplyEl.disabled = selectedIds.size === 0 || !bulkStatusEl.value;
+}
+
 function render() {
-  // Apply the status filter client-side
   const filter = filterStatusEl.value;
   const tasks = filter
-    ? allTasks.filter(t => t.status === filter)
+    ? allTasks.filter((task) => task.status === filter)
     : allTasks;
 
   listEl.innerHTML = '';
   emptyEl.hidden = tasks.length > 0;
+  emptyEl.textContent = allTasks.length === 0
+    ? 'No tasks yet. Add one above!'
+    : 'No tasks match your filters.';
 
   for (const task of tasks) {
     const li = document.createElement('li');
@@ -60,15 +97,15 @@ function render() {
       li.classList.add(task.status);
     }
 
-    // ---- Select checkbox ----
     const select = document.createElement('input');
     select.type = 'checkbox';
     select.className = 'select-check';
     select.title = 'Select for bulk action';
+    select.checked = selectedIds.has(task.id);
+    if (select.checked) li.classList.add('selected');
     select.addEventListener('change', onSelectChange);
     li.appendChild(select);
 
-    // ---- Content ----
     const content = document.createElement('div');
     content.className = 'content';
 
@@ -93,25 +130,25 @@ function render() {
     content.appendChild(meta);
     li.appendChild(content);
 
-    // ---- Per-row status dropdown ----
     const statusSelect = document.createElement('select');
     statusSelect.className = 'status-select';
     statusSelect.dataset.id = task.id;
     for (const [value, label] of Object.entries(STATUS_LABELS)) {
-      const opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = label;
-      if (value === task.status) opt.selected = true;
-      statusSelect.appendChild(opt);
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === task.status;
+      statusSelect.appendChild(option);
     }
     statusSelect.addEventListener('change', onRowStatusChange);
     li.appendChild(statusSelect);
 
-    // ---- Delete button ----
-    const delBtn = document.createElement('button');
-    delBtn.className = 'delete-btn';
-    delBtn.title = 'Delete';
-    delBtn.innerHTML = `
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'delete-btn';
+    deleteButton.type = 'button';
+    deleteButton.title = 'Delete';
+    deleteButton.setAttribute('aria-label', `Delete ${task.title}`);
+    deleteButton.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
            viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -121,19 +158,109 @@ function render() {
         <path d="M10 11v6"/>
         <path d="M14 11v6"/>
       </svg>`;
-    delBtn.addEventListener('click', () => deleteTask(task.id));
-    li.appendChild(delBtn);
+    deleteButton.addEventListener('click', () => deleteTask(task.id));
+    li.appendChild(deleteButton);
 
     listEl.appendChild(li);
   }
+
+  updateSelectionUI();
 }
 
-// ---------- Placeholder handlers (filled in later sub-steps) ----------
-function onSelectChange() {}
-function onRowStatusChange() {}
-async function deleteTask(id) {}
+function onSelectChange(event) {
+  const checkbox = event.currentTarget;
+  const id = Number(checkbox.closest('li').dataset.id);
+  if (checkbox.checked) {
+    selectedIds.add(id);
+    checkbox.closest('li').classList.add('selected');
+  } else {
+    selectedIds.delete(id);
+    checkbox.closest('li').classList.remove('selected');
+  }
+  updateSelectionUI();
+}
 
-// ---------- Toolbar ----------
+async function onRowStatusChange(event) {
+  const select = event.currentTarget;
+  try {
+    await request(`${API}/${select.dataset.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: select.value }),
+    });
+    await loadTasks();
+  } catch (error) {
+    await loadTasks();
+    showError(error);
+  }
+}
+
+async function deleteTask(id) {
+  try {
+    await request(`${API}/${id}`, { method: 'DELETE' });
+    selectedIds.delete(id);
+    await loadTasks();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+formEl.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const start = new Date(document.getElementById('start-input').value);
+  const end = new Date(document.getElementById('end-input').value);
+  const submitButton = formEl.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+
+  try {
+    await request(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: document.getElementById('title-input').value,
+        status: document.getElementById('status-input').value,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+      }),
+    });
+    formEl.reset();
+    clearError();
+    await loadTasks();
+  } catch (error) {
+    showError(error);
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+bulkApplyEl.addEventListener('click', async () => {
+  const status = bulkStatusEl.value;
+  if (!status || selectedIds.size === 0) return;
+
+  try {
+    await request(API, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        [...selectedIds].map((id) => ({ id, status })),
+      ),
+    });
+    selectedIds.clear();
+    bulkStatusEl.value = '';
+    await loadTasks();
+  } catch (error) {
+    showError(error);
+  }
+});
+
+bulkClearEl.addEventListener('click', () => {
+  selectedIds.clear();
+  bulkStatusEl.value = '';
+  render();
+});
+
+bulkStatusEl.addEventListener('change', updateSelectionUI);
+
 searchEl.addEventListener('input', () => {
   clearTimeout(searchEl._timer);
   searchEl._timer = setTimeout(loadTasks, 250);
@@ -141,5 +268,4 @@ searchEl.addEventListener('input', () => {
 
 filterStatusEl.addEventListener('change', render);
 
-// ---------- Boot ----------
 loadTasks();

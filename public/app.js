@@ -11,11 +11,19 @@ const bulkCountEl = document.getElementById('bulk-count');
 const bulkStatusEl = document.getElementById('bulk-status');
 const bulkApplyEl = document.getElementById('bulk-apply');
 const bulkClearEl = document.getElementById('bulk-clear');
+const editDialogEl = document.getElementById('edit-dialog');
+const editFormEl = document.getElementById('edit-form');
+const editTitleInputEl = document.getElementById('edit-title-input');
+const editStatusInputEl = document.getElementById('edit-status-input');
+const editEndInputEl = document.getElementById('edit-end-input');
+const editStartValueEl = document.getElementById('edit-start-value');
+const editSaveButtonEl = document.getElementById('edit-save');
 const startInputEl = document.getElementById('start-input');
 const endInputEl = document.getElementById('end-input');
 
 let allTasks = [];
 const selectedIds = new Set();
+let editingTask = null;
 
 async function request(url, options) {
   const response = await fetch(url, options);
@@ -65,13 +73,16 @@ const STATUS_LABELS = {
 };
 
 function formatTimeRange(start, end) {
-  const format = (value) => new Date(value).toLocaleString(undefined, {
+  return `${formatDateTime(start)} → ${formatDateTime(end)}`;
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
-  return `${format(start)} → ${format(end)}`;
 }
 
 function toLocalDateTimeValue(value) {
@@ -166,62 +177,8 @@ function render() {
     editButton.className = 'edit-btn';
     editButton.type = 'button';
     editButton.textContent = 'Edit';
-    editButton.setAttribute('aria-expanded', 'false');
+    editButton.addEventListener('click', () => openEditDialog(task));
     li.appendChild(editButton);
-
-    const editForm = document.createElement('form');
-    editForm.className = 'task-editor';
-    editForm.hidden = true;
-
-    const editTitle = document.createElement('label');
-    editTitle.textContent = 'Title';
-    const editTitleInput = document.createElement('input');
-    editTitleInput.type = 'text';
-    editTitleInput.value = task.title;
-    editTitleInput.required = true;
-    editTitle.appendChild(editTitleInput);
-    editForm.appendChild(editTitle);
-
-    const editEnd = document.createElement('label');
-    editEnd.textContent = 'End time (can only be moved later)';
-    const editEndInput = document.createElement('input');
-    editEndInput.type = 'datetime-local';
-    editEndInput.value = toLocalDateTimeValue(task.end_time);
-    editEndInput.min = editEndInput.value;
-    editEndInput.required = true;
-    const originalEndValue = editEndInput.value;
-    editEnd.appendChild(editEndInput);
-    editForm.appendChild(editEnd);
-
-    const saveButton = document.createElement('button');
-    saveButton.type = 'submit';
-    saveButton.textContent = 'Save';
-    editForm.appendChild(saveButton);
-
-    const cancelButton = document.createElement('button');
-    cancelButton.type = 'button';
-    cancelButton.className = 'cancel-edit-btn';
-    cancelButton.textContent = 'Cancel';
-    editForm.appendChild(cancelButton);
-
-    editButton.addEventListener('click', () => {
-      editForm.hidden = !editForm.hidden;
-      editButton.setAttribute('aria-expanded', String(!editForm.hidden));
-    });
-    cancelButton.addEventListener('click', () => {
-      editForm.hidden = true;
-      editButton.setAttribute('aria-expanded', 'false');
-    });
-    editForm.addEventListener('submit', (event) => {
-      event.preventDefault();
-      updateTask(
-        task.id,
-        editTitleInput.value,
-        editEndInput.value,
-        originalEndValue,
-      );
-    });
-    li.appendChild(editForm);
 
     const deleteButton = document.createElement('button');
     deleteButton.className = 'delete-btn';
@@ -260,6 +217,18 @@ function onSelectChange(event) {
   updateSelectionUI();
 }
 
+function openEditDialog(task) {
+  editingTask = task;
+  editFormEl.reset();
+  editTitleInputEl.value = task.title;
+  editStatusInputEl.value = task.status;
+  editEndInputEl.value = toLocalDateTimeValue(task.end_time);
+  editEndInputEl.min = editEndInputEl.value;
+  editStartValueEl.textContent = formatDateTime(task.start_time);
+  editDialogEl.showModal();
+  editTitleInputEl.focus();
+}
+
 async function onRowStatusChange(event) {
   const select = event.currentTarget;
   try {
@@ -285,25 +254,55 @@ async function deleteTask(id) {
   }
 }
 
-async function updateTask(id, title, endTime, originalEndTime) {
-  const update = { title };
-  if (endTime !== originalEndTime) {
-    update.end_time = new Date(endTime).toISOString();
-  }
-
+async function updateTask() {
+  if (!editingTask) return;
+  const update = {
+    title: editTitleInputEl.value,
+    status: editStatusInputEl.value,
+  };
+  const endTime = editEndInputEl.value;
+  const originalEndTime = toLocalDateTimeValue(editingTask.end_time);
+  if (endTime !== originalEndTime) update.end_time = new Date(endTime).toISOString();
+  editSaveButtonEl.disabled = true;
   try {
-    await request(`${API}/${id}`, {
+    await request(`${API}/${editingTask.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
     });
+    editDialogEl.close();
+    editingTask = null;
     clearError();
     await loadTasks();
   } catch (error) {
-    await loadTasks();
     showError(error);
+  } finally {
+    editSaveButtonEl.disabled = false;
   }
 }
+
+editFormEl.addEventListener('submit', (event) => {
+  event.preventDefault();
+  updateTask();
+});
+
+document.getElementById('edit-close').addEventListener('click', () => {
+  editDialogEl.close();
+  editingTask = null;
+});
+
+document.getElementById('edit-cancel').addEventListener('click', () => {
+  editDialogEl.close();
+  editingTask = null;
+});
+
+editDialogEl.addEventListener('close', () => {
+  editingTask = null;
+});
+
+editDialogEl.addEventListener('click', (event) => {
+  if (event.target === editDialogEl) editDialogEl.close();
+});
 
 formEl.addEventListener('submit', async (event) => {
   event.preventDefault();

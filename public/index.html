@@ -87,6 +87,45 @@
 
   </div>
 
+  <dialog id="edit-dialog" class="edit-dialog" aria-labelledby="edit-dialog-title">
+    <form id="edit-form" class="edit-form">
+      <header class="edit-dialog-header">
+        <div>
+          <p class="edit-dialog-eyebrow">TASK DETAILS</p>
+          <h2 id="edit-dialog-title">Edit task</h2>
+        </div>
+        <button type="button" id="edit-close" class="edit-close" aria-label="Close">×</button>
+      </header>
+
+      <label for="edit-title-input">Task title</label>
+      <input type="text" id="edit-title-input" maxlength="255" required />
+
+      <label for="edit-status-input">Status</label>
+      <select id="edit-status-input" required>
+        <option value="not_started">Not started</option>
+        <option value="in_progress">In progress</option>
+        <option value="blocked">Blocked</option>
+        <option value="on_hold">On hold</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+
+      <label for="edit-end-input">End time</label>
+      <input type="datetime-local" id="edit-end-input" required />
+      <p class="edit-help">End time can only be moved later. The start time cannot be changed.</p>
+
+      <div class="edit-start">
+        <span>Start time</span>
+        <strong id="edit-start-value"></strong>
+      </div>
+
+      <footer class="edit-dialog-actions">
+        <button type="button" id="edit-cancel" class="cancel-edit-btn">Cancel</button>
+        <button type="submit" id="edit-save">Save changes</button>
+      </footer>
+    </form>
+  </dialog>
+
   <script src="/app.js"></script>
 </body>
 </html>
